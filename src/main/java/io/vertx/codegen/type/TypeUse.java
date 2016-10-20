@@ -1,15 +1,10 @@
 package io.vertx.codegen.type;
 
-import com.sun.source.tree.AnnotatedTypeTree;
-import com.sun.source.tree.AnnotationTree;
-import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.ParameterizedTypeTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.util.Trees;
-import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.tree.JCTree;
-import com.sun.tools.javac.util.Context;
 import io.vertx.codegen.Helper;
 import io.vertx.codegen.annotations.Nullable;
 
@@ -124,17 +119,46 @@ public abstract class TypeUse {
   }
 
   private static class ReflectType implements InternalType {
-    final Type type;
+    final AnnotatedType annotated;
     final boolean nullable;
     private ReflectType(AnnotatedType annotated) {
-      this.type = annotated.getType();
+      this.annotated = annotated;
       this.nullable = TypeUse.isNullable(annotated);
     }
     public boolean isNullable() {
       return nullable;
     }
     public InternalType getArgAt(int index) {
-      throw new UnsupportedOperationException();
+      AnnotatedType arg = ((AnnotatedParameterizedType) annotated).getAnnotatedActualTypeArguments()[index];
+      List<AnnotatedType> argAnnotatedTypes = new ArrayList<>();
+
+      // The first one is the actual type so we add it
+      argAnnotatedTypes.add(arg);
+
+      //
+      ParameterizedType pt = (ParameterizedType) annotated.getType();
+      Type[] typeArgs = pt.getActualTypeArguments();
+      TypeVariable<? extends Class<?>>[] typeVars = ((Class<?>) pt.getRawType()).getTypeParameters();
+
+      // For all other types (i.e >= 1) when it's a parameterized type, this type can only be
+      // a super type of the first annotated type
+      // we need to find out
+      // if one of its type parameters matches the actual argument we need
+      for (int i = 1;i < reflectTypes.length;i++) {
+        if (reflectTypes[i].getType() instanceof ParameterizedType) {
+          ParameterizedType a = (ParameterizedType) reflectTypes[i].getType();
+          TypeVariable[] typeParam = ((Class<?>) a.getRawType()).getTypeParameters();
+          for (int j = 0;j < typeParam.length;j++) {
+            Type resolved = Helper.resolveTypeParameter(pt, typeParam[j]);
+            if (resolved != null) {
+              if (typeArgs[index].equals(resolved)) {
+                argAnnotatedTypes.add(((AnnotatedParameterizedType) reflectTypes[i]).getAnnotatedActualTypeArguments()[j]);
+              }
+            }
+          }
+        }
+      }
+      return createTypeUse(argAnnotatedTypes.toArray(new AnnotatedType[argAnnotatedTypes.size()]));
     }
   }
 
