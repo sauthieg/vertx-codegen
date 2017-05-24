@@ -151,9 +151,20 @@ public class ProxyModel extends ClassModel {
           return true;
         }
         if (resultType.getKind() == ClassKind.API) {
-          ApiTypeInfo cla = (ApiTypeInfo)resultType;
-          if (cla.isProxyGen()) {
-            return true;
+          if (resultType.isParameterized()) {
+            ParameterizedTypeInfo parameterized = (ParameterizedTypeInfo) resultType;
+            resultType = parameterized.getRaw();
+            if (resultType instanceof ApiTypeInfo) {
+              ApiTypeInfo cla = (ApiTypeInfo) resultType;
+              if (cla.isReadStream()) {
+                return true;
+              }
+            }
+          } else {
+            ApiTypeInfo cla = (ApiTypeInfo)resultType;
+            if (cla.isProxyGen()) {
+              return true;
+            }
           }
         }
       }
